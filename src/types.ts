@@ -9,12 +9,6 @@ export interface User {
   username: string;
 }
 
-export interface Friendship {
-  timestamp: string;
-  from_user: string;
-  to_user: string;
-}
-
 export type IdentifyOptions =
   | {
       uuid?: undefined;
