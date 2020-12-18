@@ -4,9 +4,22 @@ export enum FriendshipStatus {
   DECLINED,
 }
 
+export enum NotifStatus {
+  UNREAD,
+  READ,
+}
+
 export interface User {
   id: string;
   username: string;
+}
+
+export interface Notif {
+  id: number;
+  timestamp: string;
+  content: string;
+  uid: string;
+  from_uid?: string;
 }
 
 export type IdentifyOptions =
