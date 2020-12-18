@@ -1,29 +1,41 @@
+require('dotenv').config();
+
+import bodyParser from 'body-parser';
 import express from 'express';
 import morgan from 'morgan';
-import Tracer from 'tracer';
+import { authenticate } from './middleware';
+import { createFriendship, createUser, getUser, handleErr } from './util';
 
 const app = express();
-const logger = Tracer.colorConsole({
-  format: '{{timestamp}} <{{title}}> {{message}}',
-});
 
-app.use(morgan('combined'));
+app.use(morgan('dev'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.set('json spaces', 2);
 
-app.get('/friends', extractUid, (req, res) => {});
+app.post('/user', async (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: "Missing 'username' in body" });
 
-app.use((req, res, next) => {
-  res.status(404).json({ error: 'Route not found' });
+  createUser(username)
+    .then((user) => res.status(201).json(user))
+    .catch(handleErr.bind(res));
 });
 
-app.listen(3000, () => logger.info(`CrewLink-Social running on http://localhost:3000`));
+app.post('/friendship', authenticate, async (req, res) => {
+  const { to } = req.body;
+  if (!to) return res.status(400).json({ error: "Missing 'to' in body" });
 
-function extractUid(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const header = req.headers.authorization;
-  if (!header) return res.status(401).json({ error: "Missing 'Authorization' header" });
-  const uid = header.replace(/Authorization/gi, '').trim();
-  if (!uid) return res.status(401).json({ error: "Missing uid in 'Authorization' header" });
+  if (to === req.user.id) return res.status(400).json({ error: "Sorry mate, you can't be your own friend :(" });
 
-  req.uid = uid;
-  next();
-}
+  const toUser = await getUser({ uuid: to });
+  if (!toUser) return res.status(400).json({ error: "The user you are trying to request doesn't exist" });
+
+  createFriendship(req.user, toUser)
+    .then((friendship) => res.status(201).json({ success: true, created: friendship.timestamp }))
+    .catch(handleErr.bind(res));
+});
+
+app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
+
+app.listen(3000, () => console.info(`CrewLink-Social running on http://localhost:3000`));
