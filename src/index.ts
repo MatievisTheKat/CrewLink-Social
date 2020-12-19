@@ -6,7 +6,7 @@ import morgan from 'morgan';
 import ioServer, { Socket } from 'socket.io';
 import { createServer } from 'http';
 import { authenticate } from './middleware';
-import { createNotif, createUser, handleErr, readNotif } from './util';
+import { createNotif, createUser, getAllNotifs, handleErr, readNotif } from './util';
 
 const app = express();
 const server = createServer(app); //@ts-ignore
@@ -48,6 +48,22 @@ app.put('/readNotif', authenticate(), (req, res) => {
 
   readNotif(id, req.user.id)
     .then(() => res.status(200).json({ success: true }))
+    .catch(handleErr.bind(res));
+});
+
+app.get('/notifs', authenticate(), (req, res) => {
+  getAllNotifs(req.user.id)
+    .then((notifs) => {
+      res.status(200).json(
+        notifs.map((n) => {
+          return {
+            id: n.id,
+            timestamp: n.timestamp,
+            content: n.content,
+          };
+        })
+      );
+    })
     .catch(handleErr.bind(res));
 });
 
