@@ -19,12 +19,35 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set('json spaces', 2);
 
-app.post('/user', async (req, res) => {
+app.post('/createUser', (req, res) => {
   const { username } = req.body;
-  if (!username) return res.status(400).json({ error: "Missing 'username' in body" });
+  if (!username) return res.status(400).json({ error: "Missing 'username' in request body" });
 
   createUser(username)
     .then((user) => res.status(201).json(user))
+    .catch(handleErr.bind(res));
+});
+
+app.post('/createNotif', authenticate(true), (req, res) => {
+  const { to, text, signature } = req.body;
+  const signatures = ['friend.request', 'friend.decline', 'friend.accept'];
+  if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
+  if (signature && !signatures.includes(signature))
+    return res.status(400).json({ error: `Invalid signature. Use one of the following ${signatures.join(', ')}` });
+
+  createNotif(to, text, signature, sockets[to], req.user?.id)
+    .then((notif) =>
+      res.status(201).json({ id: notif.id, timestamp: notif.timestamp, content: notif.content, from: req.user?.id })
+    )
+    .catch(handleErr.bind(res));
+});
+
+app.put('/readNotif', authenticate(), (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: "Missing 'id' in request body" });
+
+  readNotif(id, req.user.id)
+    .then(() => res.status(200).json({ success: true }))
     .catch(handleErr.bind(res));
 });
 
@@ -32,16 +55,6 @@ io.on('connection', (socket: Socket) => {
   socket.on('init', (id: string) => {
     socketIds[socket.id] = id;
     sockets[id] = socket;
-  });
-
-  socket.on('send_notif', async (to: string, text: string) => {
-    const from = socketIds[socket.id];
-    const notif = await createNotif(to, text, from);
-    if (sockets[to]) sockets[to].emit('notif', notif.id, text, from);
-  });
-
-  socket.on('read_notif', async (id: number) => {
-    await readNotif(id, socketIds[socket.id]);
   });
 
   socket.on('diconnect', () => {

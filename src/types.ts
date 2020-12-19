@@ -4,14 +4,16 @@ export enum FriendshipStatus {
   DECLINED,
 }
 
-export enum NotifStatus {
-  UNREAD,
-  READ,
-}
-
 export interface User {
   id: string;
   username: string;
+}
+
+export type NotifSignature = 'friend.request' | 'friend.decline' | 'friend.accept';
+
+export enum NotifStatus {
+  UNREAD,
+  READ,
 }
 
 export interface Notif {
