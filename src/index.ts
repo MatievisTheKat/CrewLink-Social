@@ -75,9 +75,7 @@ app.get('/notifs', authenticate(), (req, res) => {
 
 io.on('connection', (socket: Socket) => {
   console.log('Socket connected: ', socket.id);
-
   socket.on('init', (id: string) => {
-    console.log(id);
     socketIds[socket.id] = id;
     sockets[id] = socket;
   });
