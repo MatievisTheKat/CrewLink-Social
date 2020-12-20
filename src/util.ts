@@ -43,15 +43,19 @@ export function updateUser(newUsername: string, { uuid, username }: IdentifyOpti
   });
 }
 
-export function createNotif(username: string, text: string, signature: NotifSignature, socket?: Socket, from?: string) {
+export function createNotif(
+  username: string,
+  text: string,
+  signature: NotifSignature,
+  sockets?: Record<string, Socket>,
+  from?: string
+) {
   return new Promise<Notif>(async (resolve, reject) => {
     const user = await getUser({ username }).catch(reject);
     if (!user) return reject(new Error(400, 'Cannot create a notification for a user that does not exist'));
 
     const fromUser = await getUser({ uuid: from }).catch(reject);
     if (from && !fromUser) return reject(new Error(400, 'Cannot create a notification from a non-existant user'));
-
-    console.log([user.id, text, from, signature]);
 
     db.query('INSERT INTO notifs ( uid, content, from_uid, signature ) VALUES ( $1, $2, $3, $4 );', [
       user.id,
@@ -60,8 +64,22 @@ export function createNotif(username: string, text: string, signature: NotifSign
       signature,
     ])
       .then(async (_) => {
-        const notif = (await getNotif(username, text).catch(reject)) as Notif;
-        if (socket) socket.emit('notif', text, signature, from);
+        const notif = (await getNotif(user.id, text).catch(reject)) as Notif;
+
+        const socket = sockets[user.id];
+        console.log(socket);
+        console.log(sockets);
+        if (socket) {
+          socket.emit('notif', {
+            id: notif.id,
+            content: text,
+            signature,
+            from: fromUser ? fromUser.username : undefined,
+            timestamp: notif.timestamp,
+            status: notif.status,
+          });
+        }
+
         resolve(notif);
       })
       .catch(reject);

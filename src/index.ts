@@ -6,11 +6,11 @@ import morgan from 'morgan';
 import ioServer, { Socket } from 'socket.io';
 import { createServer } from 'http';
 import { authenticate } from './middleware';
-import { createNotif, createUser, getAllNotifs, handleErr, readNotif } from './util';
+import { createNotif, createUser, getAllNotifs, getUser, handleErr, readNotif } from './util';
 
 const app = express();
 const server = createServer(app); //@ts-ignore
-const io = ioServer(server, { path: '/notifications' });
+const io = ioServer(server);
 const socketIds: Record<string, string> = {};
 const sockets: Record<string, Socket> = {};
 
@@ -35,9 +35,16 @@ app.post('/createNotif', authenticate(true), (req, res) => {
   if (signature && !signatures.includes(signature))
     return res.status(400).json({ error: `Invalid signature. Use one of the following ${signatures.join(', ')}` });
 
-  createNotif(to, text, signature, sockets[to], req.user?.id)
+  createNotif(to, text, signature, sockets, req.user?.id)
     .then((notif) =>
-      res.status(201).json({ id: notif.id, timestamp: notif.timestamp, content: notif.content, from: req.user?.id })
+      res.status(201).json({
+        id: notif.id,
+        timestamp: notif.timestamp,
+        content: notif.content,
+        signature: notif.signature,
+        from: req.user?.id,
+        status: notif.status,
+      })
     )
     .catch(handleErr.bind(res));
 });
@@ -53,27 +60,30 @@ app.put('/readNotif', authenticate(), (req, res) => {
 
 app.get('/notifs', authenticate(), (req, res) => {
   getAllNotifs(req.user.id)
-    .then((notifs) => {
-      res.status(200).json(
-        notifs.map((n) => {
-          return {
-            id: n.id,
-            timestamp: n.timestamp,
-            content: n.content,
-          };
-        })
-      );
+    .then(async (notifs) => {
+      const filtered = [];
+
+      for (const { id, timestamp, content, from_uid, status, signature } of notifs) {
+        const from = await getUser({ uuid: from_uid });
+        filtered.push({ id, timestamp, content, from: from.username, signature, status });
+      }
+
+      res.status(200).json(filtered);
     })
     .catch(handleErr.bind(res));
 });
 
 io.on('connection', (socket: Socket) => {
+  console.log('Socket connected: ', socket.id);
+
   socket.on('init', (id: string) => {
+    console.log(id);
     socketIds[socket.id] = id;
     sockets[id] = socket;
   });
 
   socket.on('diconnect', () => {
+    console.log('Socket disconnected: ', socket.id);
     delete sockets[socketIds[socket.id]];
     delete socketIds[socket.id];
   });

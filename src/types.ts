@@ -20,8 +20,10 @@ export interface Notif {
   id: number;
   timestamp: string;
   content: string;
+  signature: NotifSignature;
   uid: string;
   from_uid?: string;
+  status: NotifStatus;
 }
 
 export type IdentifyOptions =
