@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { Socket } from 'socket.io';
+import WebSocket from 'ws';
 import db from './database';
 import { IdentifyOptions, Notif, NotifSignature, User } from './types';
 
@@ -47,7 +47,7 @@ export function createNotif(
   username: string,
   text: string,
   signature: NotifSignature,
-  sockets?: Record<string, Socket>,
+  sockets?: Record<string, WebSocket>,
   from?: string
 ) {
   return new Promise<Notif>(async (resolve, reject) => {
@@ -67,17 +67,18 @@ export function createNotif(
         const notif = (await getNotif(user.id, text).catch(reject)) as Notif;
 
         const socket = sockets[user.id];
-        console.log(socket);
-        console.log(sockets);
         if (socket) {
-          socket.emit('notif', {
-            id: notif.id,
-            content: text,
-            signature,
-            from: fromUser ? fromUser.username : undefined,
-            timestamp: notif.timestamp,
-            status: notif.status,
-          });
+          socket.send(
+            JSON.stringify({
+              id: notif.id,
+              content: text,
+              signature,
+              from: fromUser ? fromUser.username : undefined,
+              timestamp: notif.timestamp,
+              status: notif.status,
+            }),
+            (err) => (err ? console.error(err) : null)
+          );
         }
 
         resolve(notif);

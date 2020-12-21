@@ -9,7 +9,12 @@ export interface User {
   username: string;
 }
 
-export type NotifSignature = 'friend.request' | 'friend.decline' | 'friend.accept';
+export interface WebSocketMessage {
+  event: 'init';
+  data: any;
+}
+
+export type NotifSignature = 'friend.request' | 'friend.decline' | 'friend.accept' | 'friend.remove';
 
 export enum NotifStatus {
   UNREAD,

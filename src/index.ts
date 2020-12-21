@@ -3,16 +3,16 @@ require('dotenv').config();
 import bodyParser from 'body-parser';
 import express from 'express';
 import morgan from 'morgan';
-import ioServer, { Socket } from 'socket.io';
+import WebSocket from 'ws';
 import { createServer } from 'http';
 import { authenticate } from './middleware';
 import { createNotif, createUser, getAllNotifs, getUser, handleErr, readNotif } from './util';
+import { WebSocketMessage } from './types';
 
 const app = express();
-const server = createServer(app); //@ts-ignore
-const io = ioServer(server);
-const socketIds: Record<string, string> = {};
-const sockets: Record<string, Socket> = {};
+const server = createServer(app);
+const ws = new WebSocket.Server({ server, path: '/notifSocket' });
+const sockets: Record<string, WebSocket> = {};
 
 app.use(morgan('dev'));
 app.use(bodyParser.json());
@@ -30,7 +30,7 @@ app.post('/createUser', (req, res) => {
 
 app.post('/createNotif', authenticate(true), (req, res) => {
   const { to, text, signature } = req.body;
-  const signatures = ['friend.request', 'friend.decline', 'friend.accept'];
+  const signatures = ['friend.request', 'friend.decline', 'friend.accept', 'friend.remove'];
   if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
   if (signature && !signatures.includes(signature))
     return res.status(400).json({ error: `Invalid signature. Use one of the following ${signatures.join(', ')}` });
@@ -73,18 +73,38 @@ app.get('/notifs', authenticate(), (req, res) => {
     .catch(handleErr.bind(res));
 });
 
-io.on('connection', (socket: Socket) => {
-  console.log('Socket connected: ', socket.id);
-  socket.on('init', (id: string) => {
-    socketIds[socket.id] = id;
-    sockets[id] = socket;
+const wsEvents = {
+  init: (socket: WebSocket, id: string) => (sockets[id] = socket),
+};
+
+ws.on('connection', (socket: WebSocket) => {
+  const ping = setInterval(() => socket.ping(), 30000);
+
+  socket.on('message', (msg) => {
+    const data = JSON.parse(msg.toString()) as WebSocketMessage;
+    wsEvents[data.event](socket, data.data);
   });
 
-  socket.on('diconnect', () => {
-    console.log('Socket disconnected: ', socket.id);
-    delete sockets[socketIds[socket.id]];
-    delete socketIds[socket.id];
+  socket.on('close', () => {
+    clearInterval(ping);
+    const pair = Object.entries(sockets).find((s) => (s[1] = socket));
+    if (pair) {
+      const id = pair[0];
+      delete sockets[id];
+    }
   });
+
+  // console.log('Socket connected: ', socket.id);
+  // socket.on('init', (id: string) => {
+  //   socketIds[socket.id] = id;
+  //   sockets[id] = socket;
+  // });
+
+  // socket.on('diconnect', () => {
+  //   console.log('Socket disconnected: ', socket.id);
+  //   delete sockets[socketIds[socket.id]];
+  //   delete socketIds[socket.id];
+  // });
 });
 
 app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
